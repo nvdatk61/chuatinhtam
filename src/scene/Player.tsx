@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { SPOTS, useStore, type Spot } from '../store'
@@ -6,7 +6,7 @@ import { sfx } from '../audio/sfx'
 import { FORTUNES } from '../data/fortunes'
 import { sendAction, sendState } from '../net/net'
 import { blocked, fx, me } from './fx'
-import { BOW_SECONDS, Monk, animateMonk, type MonkRefs } from './Monk'
+import { BOW_SECONDS, Monk, animateMonk, createRig } from './Monk'
 
 const SPEED = 3.2
 const NEAR_DIST = 1.7
@@ -14,7 +14,7 @@ const SEND_EVERY = 0.1 // giây – gửi vị trí 10 lần/giây
 
 export default function Player() {
   const root = useRef<THREE.Group>(null)
-  const rig = useRef<MonkRefs>({ body: null, upper: null }).current
+  const rig = useMemo(createRig, [])
   const keys = useRef<Record<string, boolean>>({})
   const yaw = useRef(0) // góc camera quanh nhân vật
   const pitch = useRef(0.38)

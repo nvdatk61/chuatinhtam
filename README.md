@@ -25,6 +25,8 @@ Nếu không kết nối được server, game tự chuyển sang **chế độ 
 
 Thêm `?debug` vào URL thì có thể điều khiển nhân vật từ console, ví dụ `player.position.set(0, 0, -6)`.
 
+Trời chuyển ngày/đêm theo giờ thật của máy. Thêm `?hour=21` (hoặc `6.5`, `18`…) để xem thử một giờ cố định.
+
 ## Điều khiển
 
 | Thao tác | Máy tính | Điện thoại |
@@ -53,6 +55,9 @@ src/
 │   ├── Monk.tsx            # model chú tiểu + animateMonk() dùng chung cho mình và người khác
 │   ├── Player.tsx          # điều khiển, camera, tương tác, gửi vị trí lên server
 │   ├── Others.tsx          # vẽ người chơi khác, nội suy vị trí, âm thanh theo khoảng cách
+│   ├── sky.ts              # chu kỳ ngày/đêm theo giờ thật, biến `ambient.night` dùng chung
+│   ├── Effects.tsx         # bloom (UnrealBloomPass có sẵn trong three) + hàm glow() tạo màu HDR
+│   ├── Particles.tsx       # cánh hoa bay (InstancedMesh) và đom đóm ban đêm
 │   └── fx.ts               # va chạm AABB, mốc thời gian hiệu ứng
 └── ui/HUD.tsx              # màn chào (nhập pháp danh, chọn màu áo), số người online, panel
 ```
