@@ -1,8 +1,11 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { fx } from './fx'
 import { useStore } from '../store'
+import { glow } from './Effects'
+import { softDotTexture } from './Particles'
+import { ambient } from './sky'
 
 const RED = '#8e1f1b'
 const RED_DARK = '#6a1512'
@@ -11,6 +14,13 @@ const ROOF = '#3f4a3c'
 const ROOF_EDGE = '#2f382d'
 const WOOD = '#6b4325'
 const STONE = '#c9bfa8'
+
+/* Màu HDR (> 1) để bloom bắt sáng – vật thường giữ màu ≤ 1 nên không bị loá */
+const FLAME = glow('#ffb347', 5)
+const EMBER = glow('#ff7a2a', 4)
+const HALO_SOFT = glow('#ffcf70', 1.6)
+const SMOKE_DAY = new THREE.Color('#e8e4dc')
+const SMOKE_NIGHT = new THREE.Color('#5c5e68')
 
 /* ---------- Mái chùa: khối chóp cụt 4 mặt + đầu đao cong ---------- */
 function Roof({ w, d, h, y, color = ROOF }: { w: number; d: number; h: number; y: number; color?: string }) {
@@ -48,10 +58,17 @@ function Roof({ w, d, h, y, color = ROOF }: { w: number; d: number; h: number; y
       {/* lưỡng long chầu nguyệt (giản lược): mặt trăng giữa nóc */}
       <mesh position={[0, h / 2 + 0.45, 0]}>
         <sphereGeometry args={[0.22, 16, 16]} />
-        <meshStandardMaterial color={GOLD} emissive={GOLD} emissiveIntensity={0.3} metalness={0.6} roughness={0.3} />
+        <RoofPearlMaterial />
       </mesh>
     </group>
   )
+}
+
+/** Ngọc giữa nóc mái: ánh vàng nhẹ ban ngày, phát sáng ban đêm */
+function RoofPearlMaterial() {
+  const ref = useRef<THREE.MeshStandardMaterial>(null)
+  useFrame(() => { if (ref.current) ref.current.emissiveIntensity = 0.3 + ambient.night * 2.2 })
+  return <meshStandardMaterial ref={ref} color={GOLD} emissive={GOLD} metalness={0.6} roughness={0.3} />
 }
 
 /* ---------- Tượng Phật (dựng từ hình khối cơ bản) ---------- */
@@ -79,15 +96,57 @@ function Buddha() {
       {/* đầu */}
       <mesh position={[0, 1.95, 0.02]} castShadow>{<sphereGeometry args={[0.3, 24, 20]} />}{gold}</mesh>
       <mesh position={[0, 2.25, 0]}>{<sphereGeometry args={[0.13, 16, 12]} />}{gold}</mesh>
-      {/* hào quang */}
+      <Halo />
+    </group>
+  )
+}
+
+/* ---------- Hào quang: vòng sáng toả bloom, "thở" chậm, sáng hơn về đêm ---------- */
+function Halo() {
+  const inner = useRef<THREE.MeshStandardMaterial>(null)
+  const outer = useRef<THREE.MeshStandardMaterial>(null)
+  const disc = useRef<THREE.MeshBasicMaterial>(null)
+  useFrame(({ clock }) => {
+    const pulse = 1 + Math.sin(clock.elapsedTime * 0.9) * 0.12
+    const n = 1 + ambient.night * 0.6
+    if (inner.current) inner.current.emissiveIntensity = 3.2 * pulse * n
+    if (outer.current) outer.current.emissiveIntensity = 2 * pulse * n
+    if (disc.current) disc.current.opacity = (0.22 + ambient.night * 0.18) * pulse
+  })
+  return (
+    <group>
       <mesh position={[0, 1.9, -0.35]}>
         <torusGeometry args={[0.62, 0.05, 10, 48]} />
-        <meshStandardMaterial color="#ffd36b" emissive="#ffb43a" emissiveIntensity={1.2} />
+        <meshStandardMaterial ref={inner} color="#ffd36b" emissive="#ffb43a" />
       </mesh>
       <mesh position={[0, 1.4, -0.4]}>
         <torusGeometry args={[1.15, 0.04, 10, 64]} />
-        <meshStandardMaterial color="#ffd36b" emissive="#ffb43a" emissiveIntensity={0.6} />
+        <meshStandardMaterial ref={outer} color="#ffd36b" emissive="#ffb43a" />
       </mesh>
+      {/* đĩa sáng mờ sau đầu tượng */}
+      <mesh position={[0, 1.9, -0.37]}>
+        <circleGeometry args={[0.6, 48]} />
+        <meshBasicMaterial ref={disc} color={HALO_SOFT} transparent depthWrite={false} blending={THREE.AdditiveBlending} />
+      </mesh>
+    </group>
+  )
+}
+
+/* ---------- Nến: ngọn lửa hình giọt nước, lung linh ---------- */
+function Candle({ x }: { x: number }) {
+  const ref = useRef<THREE.Mesh>(null)
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime + x * 3
+    const f = 1 + Math.sin(t * 17) * 0.08 + Math.sin(t * 9.3) * 0.06
+    if (ref.current) {
+      ref.current.scale.set(0.035 / f, 0.06 * f, 0.035 / f)
+      ref.current.rotation.z = Math.sin(t * 5.1) * 0.08
+    }
+  })
+  return (
+    <group position={[x, 0.95, -8.05]}>
+      <mesh position={[0, 0.15, 0]}><cylinderGeometry args={[0.05, 0.05, 0.3, 12]} /><meshStandardMaterial color="#f3e7c9" /></mesh>
+      <mesh ref={ref} position={[0, 0.35, 0]}><sphereGeometry args={[1, 10, 8]} /><meshBasicMaterial color={FLAME} /></mesh>
     </group>
   )
 }
@@ -95,12 +154,20 @@ function Buddha() {
 /* ---------- Khói hương ---------- */
 function Smoke({ position, count = 30 }: { position: [number, number, number]; count?: number }) {
   const ref = useRef<THREE.Points>(null)
+  const mat = useRef<THREE.PointsMaterial>(null)
+  const tex = useMemo(softDotTexture, [])
+  useEffect(() => () => tex.dispose(), [tex])
   const seeds = useMemo(() => Array.from({ length: count }, () => Math.random()), [count])
   const positions = useMemo(() => new Float32Array(count * 3), [count])
   useFrame(({ clock }) => {
     const pts = ref.current; if (!pts) return
     const attr = pts.geometry.getAttribute('position') as THREE.BufferAttribute
     const t = clock.elapsedTime
+    // khói không tự phát sáng: ban đêm mờ đi để khỏi trắng loá giữa nền tối
+    if (mat.current) {
+      mat.current.opacity = 0.5 - ambient.night * 0.25
+      mat.current.color.lerpColors(SMOKE_DAY, SMOKE_NIGHT, ambient.night)
+    }
     seeds.forEach((s, i) => {
       const p = (t * 0.22 + s) % 1
       attr.setXYZ(i, Math.sin(p * 7 + s * 10) * 0.15 * p, p * 1.8, Math.cos(p * 5 + s * 8) * 0.15 * p)
@@ -112,7 +179,7 @@ function Smoke({ position, count = 30 }: { position: [number, number, number]; c
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
-      <pointsMaterial size={0.09} color="#e8e4dc" transparent opacity={0.45} depthWrite={false} />
+      <pointsMaterial ref={mat} map={tex} size={0.12} transparent depthWrite={false} />
     </points>
   )
 }
@@ -123,7 +190,7 @@ function Altar() {
   const sticks = Math.min(3 + incense, 15)
   const flame = useRef<THREE.PointLight>(null)
   useFrame(({ clock }) => {
-    if (flame.current) flame.current.intensity = 2.2 + Math.sin(clock.elapsedTime * 13) * 0.25 + Math.sin(clock.elapsedTime * 7.3) * 0.2
+    if (flame.current) flame.current.intensity = 2.2 + ambient.night * 1.5 + Math.sin(clock.elapsedTime * 13) * 0.25 + Math.sin(clock.elapsedTime * 7.3) * 0.2
   })
   return (
     <group>
@@ -152,18 +219,13 @@ function Altar() {
         return (
           <group key={i} position={[Math.cos(a) * r, 1.32, -8.05 + Math.sin(a) * r]} rotation={[Math.sin(a) * 0.08, 0, Math.cos(a) * 0.08]}>
             <mesh><cylinderGeometry args={[0.008, 0.008, 0.5, 4]} /><meshStandardMaterial color="#a33" /></mesh>
-            <mesh position={[0, 0.25, 0]}><sphereGeometry args={[0.014, 6, 6]} /><meshBasicMaterial color="#ff7a2a" /></mesh>
+            <mesh position={[0, 0.25, 0]}><sphereGeometry args={[0.014, 6, 6]} /><meshBasicMaterial color={EMBER} /></mesh>
           </group>
         )
       })}
       <Smoke position={[0, 1.55, -8.05]} count={18 + sticks * 3} />
       {/* nến */}
-      {[-0.9, 0.9].map((x) => (
-        <group key={x} position={[x, 0.95, -8.05]}>
-          <mesh position={[0, 0.15, 0]}><cylinderGeometry args={[0.05, 0.05, 0.3, 12]} /><meshStandardMaterial color="#f3e7c9" /></mesh>
-          <mesh position={[0, 0.34, 0]}><sphereGeometry args={[0.035, 8, 8]} /><meshBasicMaterial color="#ffb347" /></mesh>
-        </group>
-      ))}
+      {[-0.9, 0.9].map((x) => <Candle key={x} x={x} />)}
       <pointLight ref={flame} position={[0, 1.6, -7.6]} color="#ffae5c" distance={8} decay={1.6} />
       {/* đĩa quả */}
       {[-0.5, 0.5].map((x) => (
@@ -225,13 +287,17 @@ function Hall() {
 
 function Lantern({ position }: { position: [number, number, number] }) {
   const ref = useRef<THREE.Group>(null)
+  const mat = useRef<THREE.MeshStandardMaterial>(null)
   useFrame(({ clock }) => {
-    if (ref.current) ref.current.rotation.z = Math.sin(clock.elapsedTime * 1.2 + position[0]) * 0.05
+    const t = clock.elapsedTime
+    if (ref.current) ref.current.rotation.z = Math.sin(t * 1.2 + position[0]) * 0.05
+    // ban ngày ửng nhẹ, ban đêm rực lên và chập chờn như có nến bên trong
+    if (mat.current) mat.current.emissiveIntensity = (0.9 + ambient.night * 1.0) * (1 + Math.sin(t * 7 + position[0]) * 0.04)
   })
   return (
     <group ref={ref} position={position}>
       <mesh position={[0, 0.5, 0]}><cylinderGeometry args={[0.01, 0.01, 0.7, 4]} /><meshStandardMaterial color="#222" /></mesh>
-      <mesh scale={[1, 1.2, 1]}><sphereGeometry args={[0.28, 16, 12]} /><meshStandardMaterial color="#d8322a" emissive="#ff3d2a" emissiveIntensity={0.7} /></mesh>
+      <mesh scale={[1, 1.2, 1]}><sphereGeometry args={[0.28, 16, 12]} /><meshStandardMaterial ref={mat} color="#c42a20" emissive="#ff2a12" /></mesh>
       <mesh position={[0, -0.42, 0]}><cylinderGeometry args={[0.04, 0.02, 0.25, 6]} /><meshStandardMaterial color={GOLD} /></mesh>
     </group>
   )

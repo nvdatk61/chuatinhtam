@@ -1,16 +1,16 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useStore } from '../store'
 import { onRemoteAction, remotes } from '../net/net'
 import { sfx } from '../audio/sfx'
 import { fx, me } from './fx'
-import { Monk, animateMonk, type MonkRefs } from './Monk'
+import { Monk, animateMonk, createRig } from './Monk'
 
 /** Một người chơi khác: nội suy mượt từ vị trí server gửi (10Hz) lên 60fps */
 function RemoteMonk({ id, name, color }: { id: string; name: string; color: string }) {
   const root = useRef<THREE.Group>(null)
-  const rig = useRef<MonkRefs>({ body: null, upper: null }).current
+  const rig = useMemo(createRig, [])
   const first = useRef(true)
 
   useFrame((_, dt) => {
