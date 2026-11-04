@@ -17,5 +17,13 @@
   // Durable Object dùng SQLite backend → chạy được trên gói Workers Free
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Temple"] }],
   "vars": { "MAX_PLAYERS": "100" },
+  // Cấu hình riêng cho bản Preview (mỗi nhánh/PR): Durable Object được tách riêng,
+  // không dùng chung phòng chùa với production
+  "previews": {
+    "vars": { "MAX_PLAYERS": "20" },
+    "durable_objects": {
+      "bindings": [{ "name": "TEMPLE", "class_name": "Temple" }]
+    }
+  },
   "observability": { "enabled": true }
 }
