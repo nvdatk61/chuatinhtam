@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "chua-tinh-tam",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  // Web tĩnh (build bởi Vite) được Cloudflare phục vụ trực tiếp
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    // các đường dẫn này luôn đi qua Worker thay vì tìm file tĩnh
+    "run_worker_first": ["/ws", "/health"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "TEMPLE", "class_name": "Temple" }]
+  },
+  // Durable Object dùng SQLite backend → chạy được trên gói Workers Free
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Temple"] }],
+  "vars": { "MAX_PLAYERS": "100" },
+  "observability": { "enabled": true }
+}
